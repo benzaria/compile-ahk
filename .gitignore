@@ -4,8 +4,11 @@ __*
 
 .vscode/
 .history/
+.backup/
+dist/
+
+test*
 
 upx.*
-watch.*
 readme.*
-test*
+# watcher.*

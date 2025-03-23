@@ -9,13 +9,13 @@ chcp 65001 >nul
 ::  ver 1.0 >> for more info check https://github.com/benzaria/compile-ahk   ::
 
 :__start__
-call :__global-vars__
+call :__global-vars__ "%~f0"
 call :__sys-arch__
 
 :: default values
 set "versions=32 64 32-mpress 64-mpress 32-upx 64-upx"
 set "ahk_dir=%ProgramFiles%\AutoHotkey"
-set "ahk_exe=%bin%\Ahk2Exe.exe"
+set "ahk_exe=%bin_compiler%\Ahk2Exe.exe"
 set "ahk_out_dir=dist"
 set "ahk_in_file="
 set "ahk_arch=!sys_arch!"
@@ -31,24 +31,26 @@ set "pre_build="
 set "post_build="
 
 call :__parse-args__ %* || %clean-exit%
+call :__start-alternative-buffer__
 
 if !__args_length! equ 1 if not defined ahk_in_file set "ahk_in_file=!__args[0]!"
-call :__ahk-in-file__ "%ahk_in_file%" "*.ahk"
+call :__ahk-in-file__ "!ahk_in_file!" "*.ahk"
+if not exist "!ahk_exe!" %warn% ahk-exe Compiler could not be resolved from '!ahk_exe!' ^
+    set "ahk_exe=!ahk_dir!\Compiler\Ahk2Exe.exe"
 
-for /f %%i in (' dir /b "%ahk_dir%\%ahk_ver%*" 2^>nul ') do set "ahk_dir=%ahk_dir%\%%~i"
-for /f %%i in (' dir /b "%ahk_dir%\*.exe" 2^>nul ^| find /i /v "ui" ^| find /i "32" ') do set "ahk_bin_32=%%~i"
-for /f %%i in (' dir /b "%ahk_dir%\*.exe" 2^>nul ^| find /i /v "ui" ^| find /i "64" ') do set "ahk_bin_64=%%~i"
-if defined icon set "use_icon=/icon %icon%"
-if defined resource set "use_resource=/resourceid %resource%"
-if not exist "!ahk_exe!" set "ahk_exe=!ahk_dir!\Compiler\Ahk2Exe.exe"
+for /f %%i in (' dir /b "!ahk_dir!\!ahk_ver!*" 2^>nul ') do set "ahk_dir=!ahk_dir!\%%~i"
+for /f %%i in (' dir /b "!ahk_dir!\*.exe" 2^>nul ^| find /i /v "ui" ^| find /i "32" ') do set "ahk_bin_32=%%~i"
+for /f %%i in (' dir /b "!ahk_dir!\*.exe" 2^>nul ^| find /i /v "ui" ^| find /i "64" ') do set "ahk_bin_64=%%~i"
+if defined icon set "use_icon=/icon !icon!"
+if defined resource set "use_resource=/resourceid !resource!"
 
-call :__start-alternative-buffer__
+call :__start-watcher__ && %end%
 call :__pre-compile__ &&^
 call :__compile__ &&^
 call :__post-compile__
 
 :__end__
-if defined no_emit call :__clean-build-dir__ "" force
+if defined no_emit call :__clean-build-dir__ "" no-check
 timeout /t 1 /nobreak >nul
 %info% Press a key to continue... & pause >nul
 
@@ -61,31 +63,42 @@ endlocal & exit /b !errorlevel!
         if not "%%~i"=="" set "ver=!sp!%%~i"
         set /a ver_count += 1
 
-        set "comp_exe=!compressor!"
+        set "compress_exe=!compressor!"
         set "compile_name=!ahk_out_file!!ver!.exe"
         set "compile_path=!ahk_out_path!!compile_name!"
 
-        for /f %%j in (' echo !ver! ^| findstr "mpress" ') do set "comp_exe=mpress"
-        for /f %%j in (' echo !ver! ^| findstr "upx" ') do set "comp_exe=upx"
+        for /f %%j in (' echo !ver! ^| findstr "mpress" ') do set "compress_exe=mpress"
+        for /f %%j in (' echo !ver! ^| findstr "upx" ') do set "compress_exe=upx"
 
-        call set /a compress = %%compressor[!comp_exe!]%%
-        call set "ahk_bin=%%ahk_bin_!ahk_arch!%%"
+        call set /a compress = %%compressor[!compress_exe!]%%
+        call set "ahk_bin=%%ahk_bin_!ahk_arch:~,2!%%"
 
         for /f %%j in (' echo !ver! ^| findstr "32" ') do set "ahk_bin=!ahk_bin_32!"
         for /f %%j in (' echo !ver! ^| findstr "64" ') do set "ahk_bin=!ahk_bin_64!"
     
-        set "status=Building [%-%m!compile_name![0m with [32m!ahk_bin![0m [90m!comp_exe![0m"
+        set "status=Building %esc%[96m!compile_name!%esc%[0m with %esc%[32m!ahk_bin!%esc%[0m %esc%[90m!compress_exe!%esc%[0m"
     
         %info% !status! %cr%
         "!ahk_exe!" /in "!ahk_in_file!" /out "!compile_path!" /base "!ahk_dir!\!ahk_bin!" ^
-        /compress !compress! !use_icon! !use_resource! !cp! !gui! !no_msg!
-    
-        if exist "!compile_path!" ( 
-            %success% !status!
-        ) else (
-            %error% !status!
-            set /a error_level += 1
+            /compress !compress! !use_icon! !use_resource! !cp! !gui! !no_msg! >nul 2>"%stderr%"
+
+        if not exist "!compile_path!" set "compile_error=true"
+        for /f "delims=" %%j in (' type %stderr% 2^>nul ') do (
+            echo "%%~j" | findstr /i "error" >nul && set "compile_error=true"
+            echo "%%~j" | findstr /i "syntax" >nul && set "fatal_error=true"
         )
+        
+        if defined compile_error ( 
+            %error% !status!
+            set "compile_error="
+            set /a error_level += 1
+        ) else %success% !status!
+    
+        if defined no_msg (
+            type "%stderr%" 2>nul
+            del "%stderr%" >nul 2>&1
+        )
+        if defined fatal_error if not defined no_exit %exit% 1
     )
     %exit% 0
 
@@ -101,24 +114,31 @@ endlocal & exit /b !errorlevel!
     %exit% 0
 
 :__post-compile__
-    set "err=[1;91mUn" & set "suc=[1;32m" 
+    set "err=%esc%[1;91mUn" & set "suc=%esc%[1;32m" 
     set "ratio=!error_level!/!ver_count!"
     set "str=versions were compiled"
     if !error_level! == 0 ( 
-        %success% All %str% [1;32mSuccessfully[0m
+        %success% All %str% %esc%[1;32mSuccessfully%esc%[0m
     ) else (
         if !error_level! equ !ver_count! ( 
-            %error% All %str% [1;91mUnSuccessfully[0m
+            %error% All %str% %esc%[1;91mUnSuccessfully%esc%[0m
         ) else (
-            %warn% Some %str% [1;91mUnSuccessfully [93m%ratio%[0m
+            %warn% Some %str% %esc%[1;91mUnSuccessfully %esc%[93m%ratio%%esc%[0m
         )
     )
 
     if defined post_build call :__exec-cmd__ post_build
     %exit% 0
 
-:__global-vars__
-    set "this=[0;93m%~n0[0m"
+:__global-vars__ this
+    set "esc="
+    set "cr=%esc%[F"
+    set "this_path=%~dp1"
+    set "this_name=%esc%[0;93m%~n1%esc%[0m"
+    :: This line is for the standalone version
+    if defined b2eincfilepath set "this_path=%b2eincfilepath%\Compile-ahk\"
+    set "ahk_temp=%temp%\Compile-ahk\"
+    set "stderr=%ahk_temp%stderr"
     set "regex=\.ahk$ \.ahk1$ \.ahk2$"
     set "start=goto :__start__"
     set "end=goto :__end__"
@@ -128,10 +148,12 @@ endlocal & exit /b !errorlevel!
     set "error=call :__error__"
     set "success=call :__success__"
     set "write=call :__write__"
-    set "assets=%~dp0assets"
-    set "bin=%~dp0bin"
-    set "cr=[F"
+    set "assets=!this_path!assets"
+    set "bin=!this_path!bin"
+    set "bin_compiler=%bin%\Compiler"
+    set "bin_launcher=%bin%\AutoHotkey"
     set "br=echo."
+    set "no_msg=/silent"
     set "exit=%br% & exit /b"
     set "verbose=if not defined quiet echo"
 
@@ -142,17 +164,18 @@ endlocal & exit /b !errorlevel!
     set /a ver_count = 0
     set /a sys_arch = 64
 
+    mkdir %ahk_temp% 2>nul
     exit /b 0
 
 :__start-alternative-buffer__
     set "alternative_buffer=true"
-    %write% [?1049h[?25l[H
+    %write% %esc%[?1049h%esc%[?25l%esc%[H
     exit /b 0
 
 :__end-alternative-buffer__
     if defined alternative_buffer (
         set "alternative_buffer="
-        %write% [?1049l[?25h
+        %write% %esc%[?1049l%esc%[?25h
     )
     exit /b 0
 
@@ -165,33 +188,38 @@ endlocal & exit /b !errorlevel!
         )
     )
     :break
-    if not defined file set "file=%~1" & %warn% ahk-input-file could not be resolved from '!%~1!'
-    call :__update-paths__ !file!
+    if not defined file set "file=%~1" & %warn% ahk-input-file could not be resolved from '%~1'
+    call :__update-paths__ "!file!"
     exit /b 0
 
 :__update-paths__
     set "ahk_in_file=%~f1"
     set "ahk_out_path=%~dp1"
+    if defined no_emit set "ahk_out_path=%ahk_temp%"
     set "ahk_out_file=!ahk_out_dir!\%~n1"
     set "ahk_out_dir=!ahk_out_path!!ahk_out_dir!"
-    if defined no_emit (
-        set "ahk_out_file=%~n1"
-        set "ahk_out_path=%temp%\Compile-ahk\"
-        set "ahk_out_dir=!ahk_out_path!"
+    exit /b 0
+
+:__start-watcher__
+echo !pass_args!
+    if not defined watch exit /b 1
+    if exist "%bin%\watcher.ps1" (
+        powershell -ExecutionPolicy Bypass -NoProfile -NoLogo -File "%bin%\watcher.ps1" ^
+            -Path "!ahk_in_file!" -Filter "*.ahk?" -PassArgs '!pass_args!' || %error% Watcher could not be started
     )
     exit /b 0
 
 :__clean-build-dir__
-    if not "%~2"=="force" set "force=/s /q"
+    if "%~2"=="no-check" set "bypass=rem"
     if not "%~1"=="" !%~1! Building directory has been cleared
     del "!ahk_out_dir!\*.exe" >nul 2>&1
-    rmdir "!ahk_out_dir!" !force! >nul 2>&1 || for /f %%i in (' dir /b "!ahk_out_dir!" 2^>nul ') do ^
+    !bypass! for /f %%i in (' dir /b "!ahk_out_dir!" 2^>nul ') do ^
         if not "%~1"=="" !%~1! Building directory has some non 'exe' files & exit /b 1
     exit /b 0
 
 :__sys-arch__
     if "%PROCESSOR_ARCHITEW6432%"=="" if "%PROCESSOR_ARCHITECTURE%"=="x86" set /a sys_arch = 32
-    if not exist "%bin%\upx.exe" copy /y "%bin%\upx-!sys_arch!.exe" "%bin%\upx.exe" >nul 2>&1 
+    if not exist "%bin_compiler%\upx.exe" copy /y "%bin_compiler%\upx-!sys_arch!.exe" "%bin_compiler%\upx.exe" >nul 2>&1 
     exit /b 0
 
 :__exec-cmd__
@@ -220,7 +248,7 @@ endlocal & exit /b !errorlevel!
         call :!arg! 2>nul || (
             if !errorlevel! equ 2 exit /b 2
             if !n! equ 0 (
-                set "__args=!__args!^"!arg!^" "
+                set "__args=!__args!"!arg!" "
                 set "__args[!__args_length!]=!arg!"
                 set /a __args_length += 1
             ) else (
@@ -231,8 +259,7 @@ endlocal & exit /b !errorlevel!
             if defined run if !n! equ 0 call :!run! & set "run="
         )
     )
-    if !n! neq 0 %error% Unexpected argument: !arg! ... ^
-        %br% & %info% Try %this% -h, --help & exit /b 1
+    if !n! neq 0 %error% Unexpected argument: !arg! ... & %br% & %info% Try %this_name% -h, --help & exit /b 1
     exit /b 0
 
 :: Args
@@ -265,8 +292,8 @@ endlocal & exit /b !errorlevel!
         set "no_emit=true"
         exit /b 0
     
-    :--no-msg
-        set "no_msg=/silent"
+    :--no-exit
+        set "no_exit=true"
         exit /b 0
         
     :-f
@@ -311,9 +338,25 @@ endlocal & exit /b !errorlevel!
         set "next[1]=sp"
         exit /b 0
 
+    :-w
+    :--watch
+        set "watch=true"
+        exit /b 0
+
+    :-a
+    :--args
+        set /a n = 1
+        set "next[1]=pass_args"
+        exit /b 0
+
     :-q
     :--quiet
         set "quiet=true"
+        exit /b 0
+    
+    :-m
+    :--msg
+        set "no_msg="
         exit /b 0
 
     :-n
@@ -338,67 +381,70 @@ endlocal & exit /b !errorlevel!
 
 :: Log level
     :__info__
-        %verbose% [[1;94mINFO[0m] - %*
+        %verbose% [%esc%[1;94mINFO%esc%[0m] - %*
         exit /b 0
     
     :__warn__
-        %verbose% [[1;33mWARN[0m] - %*
+        %verbose% [%esc%[1;33mWARN%esc%[0m] - %*
         exit /b 0
     
     :__error__
-        %verbose% [[1;31mERROR[0m] - %*
+        %verbose% [%esc%[1;31mERROR%esc%[0m] - %*
         exit /b 0
     
     :__success__
-        %verbose% [[1;92mSUCCESS[0m] - %*
+        %verbose% [%esc%[1;92mSUCCESS%esc%[0m] - %*
         exit /b 0
 
 :__help__
     :: Help Appearance
     set /a width = 90
     set /a pad = 1
-    set /a push = width + pad + 2
+    set /a push = 2 + width + pad
     set "show-ahk-logo=type "%assets%\ahk-logo.six" 2>nul || type "%assets%\ahk-logo.txt" 2>nul"
-    set "padding=[%pad%C"
-    set "border=echo [%push%G│[G%padding%│"
+    set "padding=%esc%[%pad%C"
+    set "border=echo %esc%[%push%G│%esc%[G%padding%│"
     set "line=──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
     set "line=!line:~,%width%!"
     set "limit1=echo %padding%╭!line!╮"
     set "limit2=echo %padding%╰!line!╯"
     
-    set "-=96"
-    set "--=90"
-    set "short=!limit1![2G%padding%[[94mShort[0m]"
-    set "long=!limit1![2G%padding%[[94mLong[0m]"
+    set "-=96" & set "--=90" & set "+=94"
+    set "short=!limit1!%esc%[2G%padding%[%esc%[94mShort%esc%[0m]"
+    set "long=!limit1!%esc%[2G%padding%[%esc%[94mLong%esc%[0m]"
     
     :: Display Help
     %show-ahk-logo%
-    echo [1;94m AutoHotkey Compiler CLI [33mv1.0[0m Made by [96m]8;;https://github.com/benzaria/compile-ahk@benzaria]8;;[0m in [32m20/03/2025[0m
+    echo %esc%[1;94m AutoHotkey Compiler CLI %esc%[33mv1.0%esc%[0m Made by %esc%[96m%esc%]8;;https://github.com/benzaria/compile-ahk@benzaria%esc%]8;;%esc%[0m in %esc%[32m20/03/2025%esc%[0m
     %br%
-    echo      [3;90m$ %this% [[%-%m-f[0m, [%--%m--file[0m] [94m^<file^>[0m [[94mOptions[0m]
+    echo      %esc%[3;90m$ %this_name% [%esc%[%-%m-f%esc%[0m, %esc%[%--%m--file%esc%[0m] %esc%[%+%m^<file^>%esc%[0m [%esc%[%+%mOptions%esc%[0m]
     %br%
     %short%
-    %border% [%-%m-f[0m, [%--%m--file[0m      [94m^<file^>[0m    Specify the input AHK script file. [90m(regex: '\.ahk[12]?$')[0m
-    %border% [%-%m-d[0m, [%--%m--dir[0m       [94m^<dir^>[0m     Define the executable output directory. [90m(default: dist)[0m
-    %border% [%-%m-v[0m, [%--%m--versions[0m  [94m^<list^>[0m    Compile for multiple versions (e.g., "32 64 "32-mpress" ...").
-    %border% [%-%m-i[0m, [%--%m--icon[0m      [94m^<icon^>[0m    Set a custom icon for the executable.
-    %border% [%-%m-c[0m, [%--%m--compress[0m  [94m^<method^>[0m  Select a compression method ([4mmpress[0m or [4mupx[0m).
-    %border% [%-%m-r[0m, [%--%m--resource[0m  [94m^<res-id^>[0m  Specify additional resources.
-    %border% [%-%m-s[0m, [%--%m--seperator[0m [94m^<char^>[0m    Define the separator between name and versions. [90m(default: -)[0m
-    rem %border% [%-%m-w[0m, [%--%m--watch[0m               Watch input file for changes.
-    %border% [%-%m-q[0m, [%--%m--quiet[0m               Disable verbose output.
-    %border% [%-%m-n[0m, [%--%m--clean[0m               Clear the output directory before compilation.
-    %border% [%-%m-p[0m, [%--%m--codepage[0m            Enable codepage conversion.
-    %border% [%-%m-g[0m, [%--%m--gui[0m                 Use the GUI version of the compiler.
-    %border% [%-%m-h[0m, [%--%m--help[0m                Display this help message.
+    %border% %esc%[%-%m-f%esc%[0m, %esc%[%--%m--file%esc%[0m      %esc%[%+%m^<file^>%esc%[0m    Specify the input AHK script file. %esc%[90m(regex: '\.ahk[12]?$')%esc%[0m
+    %border% %esc%[%-%m-d%esc%[0m, %esc%[%--%m--dir%esc%[0m       %esc%[%+%m^<dir^>%esc%[0m     Define the executable output directory. %esc%[90m(default: dist)%esc%[0m
+    %border% %esc%[%-%m-v%esc%[0m, %esc%[%--%m--versions%esc%[0m  %esc%[%+%m^<list^>%esc%[0m    Compile for multiple versions (e.g, "32 64 "32-mpress" ...").
+    %border% %esc%[%-%m-i%esc%[0m, %esc%[%--%m--icon%esc%[0m      %esc%[%+%m^<icon^>%esc%[0m    Set a custom icon for the executable.
+    %border% %esc%[%-%m-c%esc%[0m, %esc%[%--%m--compress%esc%[0m  %esc%[%+%m^<method^>%esc%[0m  Select a compression method (%esc%[4mmpress%esc%[0m or %esc%[4mupx%esc%[0m).
+    %border% %esc%[%-%m-r%esc%[0m, %esc%[%--%m--resource%esc%[0m  %esc%[%+%m^<res-id^>%esc%[0m  Specify additional resources.
+    %border% %esc%[%-%m-s%esc%[0m, %esc%[%--%m--seperator%esc%[0m %esc%[%+%m^<char^>%esc%[0m    Define the separator between name and versions. %esc%[90m(default: -)%esc%[0m
+    %border% %esc%[%-%m-w%esc%[0m, %esc%[%--%m--watch%esc%[0m               Watch input file for changes.
+    rem %border% %esc%[%-%m-a%esc%[0m, %esc%[%--%m--args%esc%[0m                Arguments to be passed to ahk file in watch mode.
+    %border% %esc%[%-%m-q%esc%[0m, %esc%[%--%m--quiet%esc%[0m               Disable verbose output.
+    %border% %esc%[%-%m-m%esc%[0m, %esc%[%--%m--msg%esc%[0m                 Use default no_msg output.
+    %border% %esc%[%-%m-n%esc%[0m, %esc%[%--%m--clean%esc%[0m               Clear the output directory before compilation.
+    %border% %esc%[%-%m-p%esc%[0m, %esc%[%--%m--codepage%esc%[0m            Enable codepage conversion.
+    %border% %esc%[%-%m-g%esc%[0m, %esc%[%--%m--gui%esc%[0m                 Use the GUI version of the compiler.
+    %border% %esc%[%-%m-h%esc%[0m, %esc%[%--%m--help%esc%[0m                Display this_name help message.
     %limit2%
     %br%
     %long%
-    %border% [%-%m--pre-build[0m     [94m^<cmd^>[0m     Register a pre-build script or command
-    %border% [%-%m--post-build[0m    [94m^<cmd^>[0m     Register a post-build script or command 
-    %border% [%-%m--ahk-dir[0m       [94m^<path^>[0m    Specify the AutoHotkey installation directory.
-    %border% [%-%m--ahk-ver[0m       [94m^<version^>[0m Set the AutoHotkey version. [90m(default: v2)[0m
-    %border% [%-%m--ahk-arch[0m      [94m^<arch^>[0m    Choose between [4m32[0m and [4m64[0m bit architectures. [90m(default: sys_arch)[0m
+    %border% %esc%[%-%m--pre-build%esc%[0m     %esc%[%+%m^<cmd^>%esc%[0m     Register a pre-build script or command.
+    %border% %esc%[%-%m--post-build%esc%[0m    %esc%[%+%m^<cmd^>%esc%[0m     Register a post-build script or command.
+    %border% %esc%[%-%m--ahk-dir%esc%[0m       %esc%[%+%m^<path^>%esc%[0m    Specify the AutoHotkey installation directory.
+    %border% %esc%[%-%m--ahk-ver%esc%[0m       %esc%[%+%m^<version^>%esc%[0m Set the AutoHotkey version. %esc%[90m(default: v2)%esc%[0m
+    %border% %esc%[%-%m--ahk-arch%esc%[0m      %esc%[%+%m^<arch^>%esc%[0m    Choose between %esc%[4m32%esc%[0m and %esc%[4m64%esc%[0m bit architectures. %esc%[90m(default: sys_arch)%esc%[0m
+    %border% %esc%[%-%m--no-emit%esc%[0m                 Don't Emit executable files.
+    rem %border% %esc%[%-%m--no-exit%esc%[0m                 Don't Exit on fatal errors (e.g, syntax).
     %limit2%
     exit /b 0
     
