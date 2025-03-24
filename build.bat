@@ -1,26 +1,27 @@
 @echo off
 setlocal EnableDelayedExpansion
-chcp 65001 >nul
 
-set "standalone=Compile-ahk-Standalone"
-set "sfx=Compile-ahk-sfx"
+set "standalone=.\dist\Compile-ahk-Standalone"
+set "sfx=.\dist\Compile-ahk-sfx.exe"
+set "zip=.\dist\Compile-ahk.7z"
 
 set /a sys_arch = 64
 if "%PROCESSOR_ARCHITEW6432%"=="" if "%PROCESSOR_ARCHITECTURE%"=="x86" set /a sys_arch = 32
 
 set "ahk_temp=%temp%\Compile-ahk"
-set "7z=./dependencies/7z/7z.exe"
-set "bat2exe=./dependencies/BatToExe/Bat_To_Exe_Converter_x!sys_arch!.exe"
+set "7z=.\dependencies\7z\7z.exe"
+set "bat2exe=.\dependencies\BatToExe\Bat_To_Exe_Converter_x!sys_arch!.exe"
 
-mkdir "./dist" 2>nul
-mkdir "%ahk_temp%" 2>nul
-del "%ahk_temp%/*" 2>nul
+mkdir ".\dist"
+mkdir "%ahk_temp%"
+del /q ".\dist\*"
+del /q "%ahk_temp%\*"
 
-xcopy "./assets" "%ahk_temp%/assets" /e /i /y
-xcopy "./bin" "%ahk_temp%/bin" /e /i /y
+xcopy /y ".\assets" "%ahk_temp%\assets" /e /i
+xcopy /y ".\bin" "%ahk_temp%\bin" /e /i
+copy  /y ".\Compile-ahk.bat" "%ahk_temp%\Compile-ahk.bat"
 
-del "./dist/*.exe" 2>nul
-del "%ahk_temp%/bin/Compiler/upx.exe" 2>nul
+del /q "%ahk_temp%\bin\Compiler\upx.exe"
 
 call :__build-standalone__ "!bat2exe!"
 call :__build-self-extract__ "!7z!"
@@ -29,17 +30,13 @@ endlocal
 exit /b 0
 
 :__build-standalone__
-    :: if you encountered any problem with the help menu locking messed up 
-    :: try using the gui BatToExe and in the settings set the codepage to UTF-8
-    "%~1" /bat "./compile-ahk.bat" /exe "./dist/%standalone%-32.exe" /include "%ahk_temp%" /extractdir 2 /workdir 0 
-    "%~1" /bat "./compile-ahk.bat" /exe "./dist/%standalone%-64.exe" /x64 /include "%ahk_temp%" /extractdir 2 /workdir 0 
-
+    :: if you encountered any problem with the standalone version not working 
+    :: try using the gui BatToExe and the settings will be preconfigured for you
+    "%~1" /bat ".\wrapper.bat" /exe "%standalone%-32.exe" /icon ".\assets\ahk-cli.ico" /include "%ahk_temp%" /extractdir 2 /workdir 0 /async
+    "%~1" /bat ".\wrapper.bat" /exe "%standalone%-64.exe" /icon ".\assets\ahk-cli.ico" /include "%ahk_temp%" /extractdir 2 /workdir 0 /async /x64
     exit /b 0
 
 :__build-self-extract__
-    
-    "%~1" a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhc=on -mmt=on -mqs=on -mmtf=on -mtc=on "./dist/%sfx%.7z" "./bin" "./assets" "./compile-ahk.bat"
-
-    copy /b "%~dp17zCon.sfx" + "%~dp1sfx.ini" + "./dist/%sfx%.7z" "./dist/%sfx%.exe"
-
+    "%~1" a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhc=on -mmt=on -mqs=on -mmtf=on -mtc=on "%zip%" "%ahk_temp%\*"
+    copy /b "%~dp17z.sfx" + "%~dp1sfx.ini" + "%zip%" "%sfx%"
     exit /b 0

@@ -7,8 +7,6 @@ __*
 .backup/
 dist/
 
-test*
-
 upx.*
 readme.*
 # watcher.*

@@ -1,8 +1,8 @@
 param (
-    [string]$Path = "./",        # Path to a file or directory
-    [string]$Filter = "*.ahk?",  # File filter to watch
-    [string]$PassArgs = "",      # Arguments to pass to file
-    [string]$Action = ""         # Action to be performed after file change
+    [string]$Path = "./",          # Path to a file or directory
+    [string]$Filter = "*.ahk?",    # File filter to watch
+    [string]$PassArgs = '$file',   # Arguments to pass to file
+    [string]$Action = ""           # Action to be performed after file change
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -37,11 +37,7 @@ $Watcher = New-Object IO.FileSystemWatcher $FilePath, $FileName -Property @{
 if (-Not (Test-Path $env:ahk_temp)) { New-Item -ItemType Directory -Path $env:ahk_temp | Out-Null }
 
 # Store running processes
-$RunningProcesses = @()
-
-if ($PassArgs) {
-    $PassArgs = "-ArgumentList $Args"
-}
+$RunningProcesses = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 
 # Function to execute AHK file
 function Reload-ahk {
@@ -51,9 +47,14 @@ function Reload-ahk {
         $fileName = [System.IO.Path]::GetFileName($FilePath)
         $tempFile = Join-Path -Path $env:ahk_temp -ChildPath $fileName
         Copy-Item -Path $FilePath -Destination $tempFile -Force
-        $proc = Start-Process "$env:bin_launcher\Launcher-$env:sys_arch.exe" $PassArgs -PassThru
-        $RunningProcesses += $proc
-        if ($Action) { Invoke-Expression $Action }
+        # Ensure $file is replaced, and if missing, prepend the file
+        if ($PassArgs -match '\$file') { $tempArgs = $PassArgs -replace '\$file', $tempFile } 
+        else { $tempArgs = "$tempFile $PassArgs" }
+        # TODO: make an automatic script restart (no-msgbox).
+        # TODO: fixing the process stoping to target the actual running script.
+        $proc = Start-Process "$env:bin_launcher\Launcher-$env:sys_arch.exe" -ArgumentList @($tempArgs) -PassThru
+        $RunningProcesses.Add($proc)
+        if ($Action) { Invoke-Expression $Action } # Run Custom Action
     } catch {
         Write-Host "$err - Running file: $_"
     }
@@ -62,10 +63,11 @@ function Reload-ahk {
 # Function to handle cleanup on exit
 function Clean-ahk {
     Write-Host "`n$inf - Stopping running scripts..."
+    
     foreach ($proc in $RunningProcesses) {
-        if (!$proc.HasExited) {
+        if ($proc -and !$proc.HasExited) {
+            Write-Host "$inf - Stopped process: $($proc.ProcessName)"
             Stop-Process -Id $proc.Id -Force
-            Write-Host "$inf - Stopped process: $($proc.Name)"
         }
     }
 

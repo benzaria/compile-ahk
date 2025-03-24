@@ -6,7 +6,7 @@ chcp 65001 >nul
 :: │                      compile-ahk MadeBy Benzaria                      │ ::
 :: │            Compile your AutoHotkey scripts with better CLI            │ ::
 :: ╰───────────────────────────────────────────────────────────────────────╯ ::
-::  ver 1.0 >> for more info check https://github.com/benzaria/compile-ahk   ::
+::  ver 1.1 >> for more info check https://github.com/benzaria/compile-ahk   ::
 
 :__start__
 call :__global-vars__ "%~f0"
@@ -49,6 +49,8 @@ call :__pre-compile__ &&^
 call :__compile__ &&^
 call :__post-compile__
 
+set /a exit_code = !errorlevel!
+
 :__end__
 if defined no_emit call :__clean-build-dir__ "" no-check
 timeout /t 1 /nobreak >nul
@@ -56,7 +58,7 @@ timeout /t 1 /nobreak >nul
 
 :__clean-exit__
 call :__end-alternative-buffer__
-endlocal & exit /b !errorlevel!
+endlocal & exit /b !exit_code!
 
 :__compile__
     for %%i in (%versions%) do (
@@ -98,7 +100,7 @@ endlocal & exit /b !errorlevel!
             type "%stderr%" 2>nul
             del "%stderr%" >nul 2>&1
         )
-        if defined fatal_error if not defined no_exit %exit% 1
+        if defined fatal_error if not defined no_exit %exit% 2
     )
     %exit% 0
 
@@ -135,8 +137,6 @@ endlocal & exit /b !errorlevel!
     set "cr=%esc%[F"
     set "this_path=%~dp1"
     set "this_name=%esc%[0;93m%~n1%esc%[0m"
-    :: This line is for the standalone version
-    if defined b2eincfilepath set "this_path=%b2eincfilepath%\Compile-ahk\"
     set "ahk_temp=%temp%\Compile-ahk\"
     set "stderr=%ahk_temp%stderr"
     set "regex=\.ahk$ \.ahk1$ \.ahk2$"
@@ -148,8 +148,8 @@ endlocal & exit /b !errorlevel!
     set "error=call :__error__"
     set "success=call :__success__"
     set "write=call :__write__"
-    set "assets=!this_path!assets"
-    set "bin=!this_path!bin"
+    set "assets=%this_path%assets"
+    set "bin=%this_path%bin"
     set "bin_compiler=%bin%\Compiler"
     set "bin_launcher=%bin%\AutoHotkey"
     set "br=echo."
@@ -201,11 +201,11 @@ endlocal & exit /b !errorlevel!
     exit /b 0
 
 :__start-watcher__
-echo !pass_args!
     if not defined watch exit /b 1
+    if defined pass_args set "pass_args=-PassArgs "!pass_args!""
     if exist "%bin%\watcher.ps1" (
         powershell -ExecutionPolicy Bypass -NoProfile -NoLogo -File "%bin%\watcher.ps1" ^
-            -Path "!ahk_in_file!" -Filter "*.ahk?" -PassArgs '!pass_args!' || %error% Watcher could not be started
+            -Path "!ahk_in_file!" -Filter "*.ahk?" !pass_args! || %error% Watcher could not be started
     )
     exit /b 0
 
@@ -218,7 +218,7 @@ echo !pass_args!
     exit /b 0
 
 :__sys-arch__
-    if "%PROCESSOR_ARCHITEW6432%"=="" if "%PROCESSOR_ARCHITECTURE%"=="x86" set /a sys_arch = 32
+    if not defined PROCESSOR_ARCHITEW6432 if "%PROCESSOR_ARCHITECTURE%"=="x86" set /a sys_arch = 32
     if not exist "%bin_compiler%\upx.exe" copy /y "%bin_compiler%\upx-!sys_arch!.exe" "%bin_compiler%\upx.exe" >nul 2>&1 
     exit /b 0
 
@@ -401,7 +401,7 @@ echo !pass_args!
     set /a width = 90
     set /a pad = 1
     set /a push = 2 + width + pad
-    set "show-ahk-logo=type "%assets%\ahk-logo.six" 2>nul || type "%assets%\ahk-logo.txt" 2>nul"
+    set "ahk-cli-logo=type "%assets%\ahk-cli-logo.six" 2>nul || type "%assets%\ahk-cli-logo.txt" 2>nul"
     set "padding=%esc%[%pad%C"
     set "border=echo %esc%[%push%G│%esc%[G%padding%│"
     set "line=──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
@@ -414,21 +414,21 @@ echo !pass_args!
     set "long=!limit1!%esc%[2G%padding%[%esc%[94mLong%esc%[0m]"
     
     :: Display Help
-    %show-ahk-logo%
-    echo %esc%[1;94m AutoHotkey Compiler CLI %esc%[33mv1.0%esc%[0m Made by %esc%[96m%esc%]8;;https://github.com/benzaria/compile-ahk@benzaria%esc%]8;;%esc%[0m in %esc%[32m20/03/2025%esc%[0m
+    %ahk-cli-logo%
+    echo %esc%[1;94m AutoHotkey Compiler CLI %esc%[33mv1.1%esc%[0m Made by %esc%[96m%esc%]8;;https://github.com/benzaria/compile-ahk@benzaria%esc%]8;;%esc%[0m in %esc%[32m20/03/2025%esc%[0m
     %br%
     echo      %esc%[3;90m$ %this_name% [%esc%[%-%m-f%esc%[0m, %esc%[%--%m--file%esc%[0m] %esc%[%+%m^<file^>%esc%[0m [%esc%[%+%mOptions%esc%[0m]
     %br%
     %short%
     %border% %esc%[%-%m-f%esc%[0m, %esc%[%--%m--file%esc%[0m      %esc%[%+%m^<file^>%esc%[0m    Specify the input AHK script file. %esc%[90m(regex: '\.ahk[12]?$')%esc%[0m
     %border% %esc%[%-%m-d%esc%[0m, %esc%[%--%m--dir%esc%[0m       %esc%[%+%m^<dir^>%esc%[0m     Define the executable output directory. %esc%[90m(default: dist)%esc%[0m
-    %border% %esc%[%-%m-v%esc%[0m, %esc%[%--%m--versions%esc%[0m  %esc%[%+%m^<list^>%esc%[0m    Compile for multiple versions (e.g, "32 64 "32-mpress" ...").
+    %border% %esc%[%-%m-v%esc%[0m, %esc%[%--%m--versions%esc%[0m  %esc%[%+%m^<list^>%esc%[0m    Compile for multiple versions. %esc%[90m(e.g, "32 64 "32-mpress" ...")%esc%[0m
     %border% %esc%[%-%m-i%esc%[0m, %esc%[%--%m--icon%esc%[0m      %esc%[%+%m^<icon^>%esc%[0m    Set a custom icon for the executable.
     %border% %esc%[%-%m-c%esc%[0m, %esc%[%--%m--compress%esc%[0m  %esc%[%+%m^<method^>%esc%[0m  Select a compression method (%esc%[4mmpress%esc%[0m or %esc%[4mupx%esc%[0m).
     %border% %esc%[%-%m-r%esc%[0m, %esc%[%--%m--resource%esc%[0m  %esc%[%+%m^<res-id^>%esc%[0m  Specify additional resources.
     %border% %esc%[%-%m-s%esc%[0m, %esc%[%--%m--seperator%esc%[0m %esc%[%+%m^<char^>%esc%[0m    Define the separator between name and versions. %esc%[90m(default: -)%esc%[0m
-    %border% %esc%[%-%m-w%esc%[0m, %esc%[%--%m--watch%esc%[0m               Watch input file for changes.
-    rem %border% %esc%[%-%m-a%esc%[0m, %esc%[%--%m--args%esc%[0m                Arguments to be passed to ahk file in watch mode.
+    %border% %esc%[%-%m-w%esc%[0m, %esc%[%--%m--watch%esc%[0m               Watch ahk file for changes and execute them.
+    %border% %esc%[%-%m-a%esc%[0m, %esc%[%--%m--args%esc%[0m                Arguments to be passed to ahk file in watch mode.
     %border% %esc%[%-%m-q%esc%[0m, %esc%[%--%m--quiet%esc%[0m               Disable verbose output.
     %border% %esc%[%-%m-m%esc%[0m, %esc%[%--%m--msg%esc%[0m                 Use default no_msg output.
     %border% %esc%[%-%m-n%esc%[0m, %esc%[%--%m--clean%esc%[0m               Clear the output directory before compilation.
@@ -444,7 +444,7 @@ echo !pass_args!
     %border% %esc%[%-%m--ahk-ver%esc%[0m       %esc%[%+%m^<version^>%esc%[0m Set the AutoHotkey version. %esc%[90m(default: v2)%esc%[0m
     %border% %esc%[%-%m--ahk-arch%esc%[0m      %esc%[%+%m^<arch^>%esc%[0m    Choose between %esc%[4m32%esc%[0m and %esc%[4m64%esc%[0m bit architectures. %esc%[90m(default: sys_arch)%esc%[0m
     %border% %esc%[%-%m--no-emit%esc%[0m                 Don't Emit executable files.
-    rem %border% %esc%[%-%m--no-exit%esc%[0m                 Don't Exit on fatal errors (e.g, syntax).
+    %border% %esc%[%-%m--no-exit%esc%[0m                 Don't Exit on fatal errors. %esc%[90m(e.g, syntax)%esc%[0m
     %limit2%
     exit /b 0
     
