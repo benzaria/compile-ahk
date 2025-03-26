@@ -11,19 +11,19 @@
 ::ZR41oxFsdFKZSDk=
 ::eBoioBt6dFKZSTk=
 ::cRo6pxp7LAbNWATEpCI=
-::egkzugNsPRvcWATEpCI=
+::egkzugNsPRvcWATEpSI=
 ::dAsiuh18IRvcCxnZtBJQ
 ::cRYluBh/LU+EWAnk
-::YxY4rhs+aU+JeA==
-::cxY6rQJ7JhzQF1fEqQJQ
-::ZQ05rAF9IBncCkqN+0xwdVs0
-::ZQ05rAF9IAHYFVzEqQJQ
-::eg0/rx1wNQPfEVWB+kM9LVsJDGQ=
-::fBEirQZwNQPfEVWB+kM9LVsJDGQ=
-::cRolqwZ3JBvQF1fEqQJQ
-::dhA7uBVwLU+EWDk=
+::YxY4rhs+aU+IeA==
+::cxY6rQJ7JhzQF1fEqQJhZkkaHErSXA==
+::ZQ05rAF9IBncCkqN+0xwdVsFAlbMbCXqZg==
+::ZQ05rAF9IAHYFVzEqQIRPQ9bZAuWN26jRpYT5fjy4++V4m4xfYI=
+::eg0/rx1wNQPfEVWB+kM9LVsJDCeNMXuzCrBR6eDwoe+fpy0=
+::fBEirQZwNQPfEVWB+kM9LVsJDCeNMXuzCrBR6eDwjw==
+::cRolqwZ3JBvQF1fEqQITJxZERQiHfGq0AvU58O34+v6C4lQSQfB/WZrP1ZyBNOsW8wX3doQkxm5J2NwFGBMYfBe/egom6U1unwQ=
+::dhA7uBVwLU+EWFuB+lgxOhJVLA==
 ::YQ03rBFzNR3SWATElA==
-::dhAmsQZ3MwfNWATElA==
+::dhAmsQZ3MwfNWATE9kc+MhpGRQXi
 ::ZQ0/vhVqMQ3MEVWAtB9wSA==
 ::Zg8zqx1/OA3MEVWAtB9wSA==
 ::dhA7pRFwIByZRRnk
@@ -38,18 +38,19 @@ set "cli_path=%b2eincfilepath%\Compile-ahk"
 set "cli=%cli_path%\Compile-ahk.bat"
 
 call :__cli-exist__ || (
-    timeout /t 2 /nobreak >nul
+    echo [[1;94mINFO[0m] - First run can be a litle slow.
+    timeout /t 5 /nobreak >nul
     call :__cli-exist__ || (
-        echo [[1;91mERROR[0m] - Ahk CLI could not be resolved in '%cli_path%'
+        echo [F[[1;91mERROR[0m] - Ahk CLI could not be resolved in '%cli_path%'
         exit /b 1
     )
 )
 
+echo [F[K[F
 "%cli%" %*
 
 exit /b 0
 
 :__cli-exist__
-    if not exist "%cli_path%" exit /b 1
-    if not exist "%cli%" exit /b 1
-    exit /b 0
+    if exist "%cli%" exit /b 0
+    exit /b 1

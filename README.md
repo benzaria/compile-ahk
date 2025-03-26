@@ -209,7 +209,7 @@ If the script encounters an error, it will display a message indicating the issu
         <span style="float: right;">LICENSE: <a href="./LICENSE">MIT</a></span>
     </div>
     <div>
-        <span>Version: 1.1</span>
+        <span>Version: 1.2</span>
         <span style="float: right;">Updated: 20/03/2005</span>
     </div>
 </div>

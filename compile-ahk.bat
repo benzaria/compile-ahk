@@ -6,7 +6,7 @@ chcp 65001 >nul
 :: │                      compile-ahk MadeBy Benzaria                      │ ::
 :: │            Compile your AutoHotkey scripts with better CLI            │ ::
 :: ╰───────────────────────────────────────────────────────────────────────╯ ::
-::  ver 1.1 >> for more info check https://github.com/benzaria/compile-ahk   ::
+::  ver 1.2 >> for more info check https://github.com/benzaria/compile-ahk   ::
 
 :__start__
 call :__global-vars__ "%~f0"
@@ -426,7 +426,7 @@ endlocal & exit /b !exit_code!
 
     :: Display Help
     call :__display-logo__
-    echo %esc%[1;94m AutoHotkey Compiler CLI %esc%[33mv1.1%¬% Made by %esc%[96m%esc%]8;;https://github.com/benzaria/compile-ahk@benzaria%esc%]8;;%¬% in %esc%[32m20/03/2025%¬%
+    echo %esc%[1;94m AutoHotkey Compiler CLI %esc%[33mv1.2%¬% Made by %esc%[96m%esc%]8;;https://github.com/benzaria/compile-ahk@benzaria%esc%]8;;%¬% in %esc%[32m20/03/2025%¬%
     %br%
     echo      %esc%[3;90m$ %this_name% [%-%-f%¬%, %--%--file%¬%] %+%^<file^|dir^>%¬% [%+%Args%¬%] [%+%Options%¬%]
     %br%
@@ -434,7 +434,7 @@ endlocal & exit /b !exit_code!
     %border% %-%-f%¬%, %--%--file%¬%      %+%^<path^>%¬%    Specify the input AHK file or directory. %'%(regex: '\.ahk[12]?$')%¬%
     %border% %-%-d%¬%, %--%--dir%¬%       %+%^<path^>%¬%    Define the executable output directory. %'%(default: dist)%¬%
     %border% %-%-v%¬%, %--%--versions%¬%  %+%^<list^>%¬%    Compile for multiple versions. %'%(e.g, "32 64 "32-mpress" ...")%¬%
-    %border% %-%-i%¬%, %--%--icon%¬%      %+%^<icon^>%¬%   Set a custom icon for the executable.
+    %border% %-%-i%¬%, %--%--icon%¬%      %+%^<icon^>%¬%    Set a custom icon for the executable.
     %border% %-%-c%¬%, %--%--compress%¬%  %+%^<method^>%¬%  Select a compression method (%_%mpress%¬% or %_%upx%¬%).
     %border% %-%-a%¬%, %--%--arch%¬%      %+%^<32^|64^>%¬%   Choose between %_%32%¬% and %_%64%¬% bit architectures. %'%(default: sys_arch)%¬%
     %border% %-%-r%¬%, %--%--resource%¬%  %+%^<res-id^>%¬%  Specify resource ID.
