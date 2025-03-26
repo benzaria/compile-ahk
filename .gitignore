@@ -8,5 +8,5 @@ __*
 dist/
 
 upx.*
-readme.*
+# readme.*
 # watcher.*
