@@ -9,16 +9,17 @@ set /a sys_arch = 64
 if "%PROCESSOR_ARCHITEW6432%"=="" if "%PROCESSOR_ARCHITECTURE%"=="x86" set /a sys_arch = 32
 
 set "ahk_temp=%temp%\Compile-ahk"
-set "7z=.\dependencies\7z\7z.exe"
-set "bat2exe=.\dependencies\BatToExe\Bat_To_Exe_Converter_x!sys_arch!.exe"
+set "rh=.\dev-dependencies\ResourceHacker\RH.exe"
+set "7z=.\dev-dependencies\7z\7z.exe"
+set "bat2exe=.\dev-dependencies\BatToExe\Bat_To_Exe_Converter_x!sys_arch!.exe"
 
 mkdir ".\dist"
 mkdir "%ahk_temp%"
 del /q ".\dist\*"
 del /q "%ahk_temp%\*"
 
-xcopy /y ".\assets" "%ahk_temp%\assets" /e /i
 xcopy /y ".\bin" "%ahk_temp%\bin" /e /i
+copy  /y ".\assets\ahk-cli-logo.six" "%ahk_temp%\assets\ahk-cli-logo.six"
 copy  /y ".\Compile-ahk.bat" "%ahk_temp%\Compile-ahk.bat"
 
 del /q "%ahk_temp%\bin\Compiler\upx.exe"
@@ -39,4 +40,5 @@ exit /b 0
 :__build-self-extract__
     "%~1" a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhc=on -mmt=on -mqs=on -mmtf=on -mtc=on "%zip%" "%ahk_temp%\*"
     copy /b "%~dp17z.sfx" + "%~dp1sfx.ini" + "%zip%" "%sfx%"
+    "%rh%" -open ".\dist\Compile-ahk-sfx.exe" -save ".\dist\sfx.exe" -action addoverwrite -mask ICONGROUP,1,0 -log CONSOLE -resource ".\assets\ahk-cli.ico"
     exit /b 0
